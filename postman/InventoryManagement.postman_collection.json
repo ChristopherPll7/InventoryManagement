@@ -1,0 +1,1142 @@
+{
+  "info": {
+    "name": "Inventory Management - Acceptance",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Run all folders in order, one iteration, with the Local environment and a fresh adminInventory accessToken obtained through Swagger. Creates one category, one product and two movements; deactivates the category/product without physically deleting history. The optional 403 case requires a separate valid restrictedAccessToken. See postman/README.md."
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{accessToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "runId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "categoryId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "productId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "missingId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "entryDate",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "firstMovementId",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "01 - Setup and categories",
+      "item": [
+        {
+          "name": "01 Health and initialize run",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/health",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"runId\", pm.variables.replaceIn(\"{{$guid}}\"));",
+                  "pm.collectionVariables.set(\"missingId\", pm.variables.replaceIn(\"{{$guid}}\"));",
+                  "[\"categoryId\", \"productId\", \"entryDate\"].forEach(key => pm.collectionVariables.unset(key));",
+                  "if (!pm.environment.get(\"accessToken\")) { throw new Error(\"Set accessToken in the selected local environment before running.\"); }"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json();",
+                  "pm.test(\"status\", () => { pm.expect(data.status).to.eql(\"healthy\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "02 Create category",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/categories",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Postman {{runId}}\",\n  \"description\": \"Postman acceptance test\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+                  "const data = pm.response.json();",
+                  "pm.test(\"Resource created\", () => { pm.expect(data.id).to.match(/^[0-9a-f-]{36}$/i); pm.collectionVariables.set(\"categoryId\", data.id); pm.expect(pm.response.headers.get(\"Location\")).to.include(data.id); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "03 List categories",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/categories"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json();",
+                  "pm.test(\"Created category is listed\", () => { pm.expect(data.some(x => x.id === pm.collectionVariables.get(\"categoryId\"))).to.eql(true); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "04 Get category",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/categories/{{categoryId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json();",
+                  "pm.test(\"isActive\", () => { pm.expect(data.isActive).to.eql(true); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "05 Update category",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/categories/{{categoryId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Postman {{runId}}\",\n  \"description\": \"Updated by Postman\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json();",
+                  "pm.test(\"description\", () => { pm.expect(data.description).to.eql(\"Updated by Postman\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "06 Duplicate category",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/categories",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Postman {{runId}}\",\n  \"description\": \"Postman acceptance test\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 409\", () => pm.response.to.have.status(409));",
+                  "const data = pm.response.json();",
+                  "pm.test(\"Error envelope\", () => { pm.expect(data.code).to.be.a(\"string\").and.not.empty; pm.expect(data.message).to.be.a(\"string\").and.not.empty; pm.expect(data.code).to.eql(\"DUPLICATE_CATEGORY_NAME\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "07 Invalid category",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/categories",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"\",\n  \"description\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));",
+                  "const data = pm.response.json();",
+                  "pm.test(\"Error envelope\", () => { pm.expect(data.code).to.be.a(\"string\").and.not.empty; pm.expect(data.message).to.be.a(\"string\").and.not.empty;  });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "02 - Products",
+      "item": [
+        {
+          "name": "08 Create product",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/products",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Postman product\",\n  \"description\": \"Acceptance test\",\n  \"sku\": \"PM-{{runId}}\",\n  \"price\": 12.5,\n  \"categoryId\": \"{{categoryId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+                  "const data = pm.response.json();",
+                  "pm.test(\"Resource created\", () => { pm.expect(data.id).to.match(/^[0-9a-f-]{36}$/i); pm.collectionVariables.set(\"productId\", data.id); pm.expect(pm.response.headers.get(\"Location\")).to.include(data.id); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "09 List products",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/products"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json();",
+                  "pm.test(\"Created product is listed\", () => { pm.expect(data.some(x => x.id === pm.collectionVariables.get(\"productId\"))).to.eql(true); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "10 Get product",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/products/{{productId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json();",
+                  "pm.test(\"currentStock\", () => { pm.expect(data.currentStock).to.eql(0); });pm.test(\"categoryId\", () => { pm.expect(data.categoryId).to.eql(pm.collectionVariables.get(\"categoryId\")); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "11 Update product",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/products/{{productId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated product\",\n  \"description\": \"Acceptance test\",\n  \"sku\": \"PM-{{runId}}\",\n  \"price\": 15.25,\n  \"categoryId\": \"{{categoryId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json();",
+                  "pm.test(\"name\", () => { pm.expect(data.name).to.eql(\"Updated product\"); });pm.test(\"price\", () => { pm.expect(data.price).to.eql(15.25); });pm.test(\"currentStock\", () => { pm.expect(data.currentStock).to.eql(0); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "12 Duplicate SKU",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/products",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Postman product\",\n  \"description\": \"Acceptance test\",\n  \"sku\": \"PM-{{runId}}\",\n  \"price\": 12.5,\n  \"categoryId\": \"{{categoryId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 409\", () => pm.response.to.have.status(409));",
+                  "const data = pm.response.json();",
+                  "pm.test(\"Error envelope\", () => { pm.expect(data.code).to.be.a(\"string\").and.not.empty; pm.expect(data.message).to.be.a(\"string\").and.not.empty; pm.expect(data.code).to.eql(\"DUPLICATE_PRODUCT_SKU\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "13 Invalid product price",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/products",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Postman product\",\n  \"description\": \"Acceptance test\",\n  \"sku\": \"BAD-{{runId}}\",\n  \"price\": -1,\n  \"categoryId\": \"{{categoryId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));",
+                  "const data = pm.response.json();",
+                  "pm.test(\"Error envelope\", () => { pm.expect(data.code).to.be.a(\"string\").and.not.empty; pm.expect(data.message).to.be.a(\"string\").and.not.empty;  });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "14 Missing product",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/products/{{missingId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 404\", () => pm.response.to.have.status(404));",
+                  "const data = pm.response.json();",
+                  "pm.test(\"Error envelope\", () => { pm.expect(data.code).to.be.a(\"string\").and.not.empty; pm.expect(data.message).to.be.a(\"string\").and.not.empty; pm.expect(data.code).to.eql(\"PRODUCT_NOT_FOUND\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "15 Category with active product",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/api/categories/{{categoryId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 409\", () => pm.response.to.have.status(409));",
+                  "const data = pm.response.json();",
+                  "pm.test(\"Error envelope\", () => { pm.expect(data.code).to.be.a(\"string\").and.not.empty; pm.expect(data.message).to.be.a(\"string\").and.not.empty; pm.expect(data.code).to.eql(\"CATEGORY_IN_USE\"); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "03 - Inventory and history",
+      "item": [
+        {
+          "name": "16 Empty history",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/inventory/products/{{productId}}/movements"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json();",
+                  "pm.test(\"totalCount\", () => { pm.expect(data.totalCount).to.eql(0); });pm.test(\"items\", () => { pm.expect(data.items).to.eql([]); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "17 Register entry",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/inventory/movements",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": \"{{productId}}\",\n  \"type\": \"Entry\",\n  \"quantity\": 10,\n  \"reason\": \"Postman acceptance test\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+                  "const data = pm.response.json();"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "18 Register exit",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/inventory/movements",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": \"{{productId}}\",\n  \"type\": \"Exit\",\n  \"quantity\": 3,\n  \"reason\": \"Postman acceptance test\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 201\", () => pm.response.to.have.status(201));",
+                  "const data = pm.response.json();"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "19 Balance equals seven",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/inventory/products/{{productId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json();",
+                  "pm.test(\"currentStock\", () => { pm.expect(data.currentStock).to.eql(7); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "20 Reject insufficient stock",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/inventory/movements",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": \"{{productId}}\",\n  \"type\": \"Exit\",\n  \"quantity\": 8,\n  \"reason\": \"Postman acceptance test\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 409\", () => pm.response.to.have.status(409));",
+                  "const data = pm.response.json();",
+                  "pm.test(\"Error envelope\", () => { pm.expect(data.code).to.be.a(\"string\").and.not.empty; pm.expect(data.message).to.be.a(\"string\").and.not.empty; pm.expect(data.code).to.eql(\"INSUFFICIENT_STOCK\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "21 Reject zero quantity",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/inventory/movements",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": \"{{productId}}\",\n  \"type\": \"Entry\",\n  \"quantity\": 0,\n  \"reason\": \"Postman acceptance test\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));",
+                  "const data = pm.response.json();",
+                  "pm.test(\"Error envelope\", () => { pm.expect(data.code).to.be.a(\"string\").and.not.empty; pm.expect(data.message).to.be.a(\"string\").and.not.empty;  });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "22 Reject numeric movement type",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/inventory/movements",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": \"{{productId}}\",\n  \"type\": 1,\n  \"quantity\": 1,\n  \"reason\": \"Postman acceptance test\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));",
+                  "const data = pm.response.json();",
+                  "pm.test(\"Error envelope\", () => { pm.expect(data.code).to.be.a(\"string\").and.not.empty; pm.expect(data.message).to.be.a(\"string\").and.not.empty;  });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "23 History contains only successful movements",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/inventory/products/{{productId}}/movements?page=1&pageSize=20"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json();",
+                  "pm.test(\"totalCount\", () => { pm.expect(data.totalCount).to.eql(2); });pm.test(\"items.length\", () => { pm.expect(data.items.length).to.eql(2); });pm.test(\"Stock matches history\", () => { pm.expect(data.items.reduce((sum, x) => sum + (x.type === \"Entry\" ? x.quantity : -x.quantity), 0)).to.eql(7); });pm.test(\"Newest timestamps first\", () => { pm.expect(Date.parse(data.items[0].createdAt)).to.be.at.least(Date.parse(data.items[1].createdAt)); });pm.collectionVariables.set(\"entryDate\", encodeURIComponent(data.items.find(x => x.type === \"Entry\").createdAt));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "24 Entry filter and inclusive date bounds",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/inventory/products/{{productId}}/movements?type=Entry&startDate={{entryDate}}&endDate={{entryDate}}&page=1&pageSize=1"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json();",
+                  "pm.test(\"totalCount\", () => { pm.expect(data.totalCount).to.eql(1); });pm.test(\"items.length\", () => { pm.expect(data.items.length).to.eql(1); });pm.test(\"items[0].type\", () => { pm.expect(data.items[0].type).to.eql(\"Entry\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "25 Page one",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/inventory/products/{{productId}}/movements?page=1&pageSize=1"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json();",
+                  "pm.test(\"totalPages\", () => { pm.expect(data.totalPages).to.eql(2); });pm.test(\"items.length\", () => { pm.expect(data.items.length).to.eql(1); });pm.collectionVariables.set(\"firstMovementId\", data.items[0].id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "26 Page two",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/inventory/products/{{productId}}/movements?page=2&pageSize=1"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json();",
+                  "pm.test(\"page\", () => { pm.expect(data.page).to.eql(2); });pm.test(\"items.length\", () => { pm.expect(data.items.length).to.eql(1); });pm.test(\"No repeated movement\", () => { pm.expect(data.items[0].id).not.to.eql(pm.collectionVariables.get(\"firstMovementId\")); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "27 Page beyond results",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/inventory/products/{{productId}}/movements?page=3&pageSize=1"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json();",
+                  "pm.test(\"items\", () => { pm.expect(data.items).to.eql([]); });pm.test(\"totalCount\", () => { pm.expect(data.totalCount).to.eql(2); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "28 Reject excessive page size",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/inventory/products/{{productId}}/movements?pageSize=101"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));",
+                  "const data = pm.response.json();",
+                  "pm.test(\"Error envelope\", () => { pm.expect(data.code).to.be.a(\"string\").and.not.empty; pm.expect(data.message).to.be.a(\"string\").and.not.empty;  });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "29 Reject reversed dates",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/inventory/products/{{productId}}/movements?startDate=2026-02-01T00:00:00Z&endDate=2026-01-01T00:00:00Z"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 400\", () => pm.response.to.have.status(400));",
+                  "const data = pm.response.json();",
+                  "pm.test(\"Error envelope\", () => { pm.expect(data.code).to.be.a(\"string\").and.not.empty; pm.expect(data.message).to.be.a(\"string\").and.not.empty;  });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "30 Balance unchanged after rejected writes",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/inventory/products/{{productId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json();",
+                  "pm.test(\"currentStock\", () => { pm.expect(data.currentStock).to.eql(7); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "04 - Authentication",
+      "item": [
+        {
+          "name": "31 Missing token",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/products",
+            "auth": {
+              "type": "noauth"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 401\", () => pm.response.to.have.status(401));",
+                  "const data = pm.response.json();",
+                  "pm.test(\"Error envelope\", () => { pm.expect(data.code).to.be.a(\"string\").and.not.empty; pm.expect(data.message).to.be.a(\"string\").and.not.empty; pm.expect(data.code).to.eql(\"UNAUTHORIZED\"); });",
+                  "pm.test(\"Bearer challenge\", () => { pm.expect(pm.response.headers.get(\"WWW-Authenticate\")).to.include(\"Bearer\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "32 Optional - authenticated without products.read",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/products",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{restrictedAccessToken}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (!pm.environment.get(\"restrictedAccessToken\")) { console.warn(\"403 case skipped: restrictedAccessToken is not configured.\"); pm.execution.skipRequest(); }"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 403\", () => pm.response.to.have.status(403));",
+                  "const data = pm.response.json();",
+                  "pm.test(\"Error envelope\", () => { pm.expect(data.code).to.be.a(\"string\").and.not.empty; pm.expect(data.message).to.be.a(\"string\").and.not.empty; pm.expect(data.code).to.eql(\"FORBIDDEN\"); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "05 - Deactivation and preserved history",
+      "item": [
+        {
+          "name": "33 Deactivate product",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/api/products/{{productId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 204\", () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "34 Deactivation is idempotent",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/api/products/{{productId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 204\", () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "35 Inactive product remains readable",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/products/{{productId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json();",
+                  "pm.test(\"isActive\", () => { pm.expect(data.isActive).to.eql(false); });pm.test(\"currentStock\", () => { pm.expect(data.currentStock).to.eql(7); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "36 Reject movement on inactive product",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/inventory/movements",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"productId\": \"{{productId}}\",\n  \"type\": \"Entry\",\n  \"quantity\": 1,\n  \"reason\": \"Postman acceptance test\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 409\", () => pm.response.to.have.status(409));",
+                  "const data = pm.response.json();",
+                  "pm.test(\"Error envelope\", () => { pm.expect(data.code).to.be.a(\"string\").and.not.empty; pm.expect(data.message).to.be.a(\"string\").and.not.empty; pm.expect(data.code).to.eql(\"PRODUCT_INACTIVE\"); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "37 Deactivate category",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/api/categories/{{categoryId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 204\", () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "38 Inactive category remains readable",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/categories/{{categoryId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json();",
+                  "pm.test(\"isActive\", () => { pm.expect(data.isActive).to.eql(false); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "39 History is preserved",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/inventory/products/{{productId}}/movements"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
+                  "const data = pm.response.json();",
+                  "pm.test(\"totalCount\", () => { pm.expect(data.totalCount).to.eql(2); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "40 Missing category",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/categories/{{missingId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"HTTP 404\", () => pm.response.to.have.status(404));",
+                  "const data = pm.response.json();",
+                  "pm.test(\"Error envelope\", () => { pm.expect(data.code).to.be.a(\"string\").and.not.empty; pm.expect(data.message).to.be.a(\"string\").and.not.empty; pm.expect(data.code).to.eql(\"CATEGORY_NOT_FOUND\"); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

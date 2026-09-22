@@ -1,0 +1,92 @@
+{
+  "realm": "inventory-management",
+  "enabled": true,
+  "displayName": "Inventory Management",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": true,
+  "clients": [
+    {
+      "clientId": "inventory-api",
+      "name": "Inventory API Resource",
+      "enabled": true,
+      "bearerOnly": true,
+      "protocol": "openid-connect"
+    },
+    {
+      "clientId": "inventory-swagger",
+      "name": "Inventory API Swagger",
+      "enabled": true,
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "redirectUris": [
+        "http://localhost:8080/swagger/oauth2-redirect.html"
+      ],
+      "webOrigins": [
+        "http://localhost:8080"
+      ],
+      "protocol": "openid-connect",
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
+      "protocolMappers": [
+        {
+          "name": "inventory-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "inventory-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        },
+        {
+          "name": "inventory-api-permissions",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-client-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "usermodel.clientRoleMapping.clientId": "inventory-api",
+            "claim.name": "permissions",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "access.token.claim": "true",
+            "id.token.claim": "false",
+            "userinfo.token.claim": "false"
+          }
+        }
+      ]
+    }
+  ],
+  "roles": {
+    "client": {
+      "inventory-api": [
+        {
+          "name": "products.read",
+          "description": "Permission to products read"
+        },
+        {
+          "name": "products.write",
+          "description": "Permission to products write"
+        },
+        {
+          "name": "categories.read",
+          "description": "Permission to categories read"
+        },
+        {
+          "name": "categories.write",
+          "description": "Permission to categories write"
+        },
+        {
+          "name": "inventory.read",
+          "description": "Permission to inventory read"
+        },
+        {
+          "name": "inventory.write",
+          "description": "Permission to inventory write"
+        }
+      ]
+    }
+  }
+}
