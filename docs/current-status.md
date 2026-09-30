@@ -1,5 +1,47 @@
 # Current Project Status
 
+## Latest update: results across all handlers (2026-09-29)
+
+- All 13 business handlers now expose Result<T>, including product updates/deactivation, category operations, inventory registration, catalog lists and movement history. Missing resources and Application prechecks return explicit failures. Domain/store exceptions are adapted at handler boundaries; technical failures and cancellation propagate.
+- Controllers unwrap results while preserving success payloads, Location headers, 204 responses and existing business error statuses. History filter construction now occurs inside its handler, so invalid dates and pagination become failures. Removed LegacyDomainExceptionFilter and its registration.
+- Domain factories and transactional stores still throw internally. Their transaction/rollback protocol remains intact; this completes handler propagation, not elimination of every internal business exception. See ADR-020.
+- Verified build: zero warnings/errors. Full suite through scripts/Test-Sql.ps1 on the existing InventoryManagement database: 257 passed (36 Domain, 57 Application, 127 API, 37 Infrastructure), zero failures/skips, including 35 SQL cases. Added coverage for inventory conflicts, invalid input before persistence, technical/cancellation propagation, missing deactivations, category results and history validation.
+- Verified no changes to SchemaMigrator/SchemaMigration, InventoryReadDbContext, JwtAuthorizationTests/JwtApiFactory or ReadOnlyContextTests. Migration, concurrency and read-only protections passed their existing tests. No schema changes, database deletion, deployment, commit or push performed.
+
+## Latest update: paginated catalog lists (2026-09-29)
+
+- GET /api/products and GET /api/categories now return PagedResult envelopes (items, page, pageSize, totalCount, totalPages) instead of arrays. Defaults are page 1 and size 20; permitted ranges are page 1–10000 and size 1–100. Shared PageRequest validation also backs the unchanged history limits.
+- EF applies Name/Id ordering and Skip/Take before materializing results; inactive rows remain visible. Count and items are separate reads without snapshot guarantees. Invalid ranges return INVALID_PAGINATION/400.
+- Updated ports, queries, handlers, DI, Swagger response metadata, test doubles and Postman list assertions. Postman checks the envelope rather than assuming a newly created item appears on page one; subsequent ID requests verify that record. Its 40-request JSON/scripts were validated, not executed in Postman.
+- Full existing-database suite: 244 passed (36 Domain, 44 Application, 127 API, 37 Infrastructure), no failures/skips. Includes 35 SQL cases; new cases verify ordered traversal without duplicates, total counts, beyond-last pages, inactive records and no EF tracking. HTTP cases verify default envelopes and pagination bounds.
+- Protected migration/checksum implementation, JWT tests/factory and read-context guards/tests remain unchanged. No schema changes, deployment, commit or push. This is a catalog response-contract change; clients must consume items and request subsequent pages. See README and ADR-019.
+
+## Latest update: transactional product update validation (2026-09-29)
+
+- UpdateProductCommandHandler now depends only on IProductCommandStore. It sends the product ID and immutable, validated ProductDetails; no product/category/SKU prequeries or detached product mutation remain in the handler.
+- ProductDetails centralizes the original domain validation and normalization of editable fields. Product creation and primitive Update retain the same rules; applying validated details to the locked product does not repeat field validation.
+- ProductCommandStore.UpdateAsync retains the target-category-first lock order, Serializable transaction, locked EF reads and Dapper update. Category activity/product existence are evaluated there; SQL uniqueness and conflict translation handle duplicate SKUs. Stock, activation and creation time are preserved. The final EF projection still reads persisted stock for the response.
+- Adapted store doubles and SQL tests to the new signature. Added rejection-before-store coverage and verified normalized details are passed without validation queries. Full suite passed: 230 tests (36 Domain, 44 Application, 115 API, 35 Infrastructure), zero failures/skips, including 33 SQL cases on the existing database. Final build: zero warnings/errors.
+- Schema migration implementation, JWT tests/factory, InventoryReadDbContext and ReadOnlyContextTests remain unchanged. No schema change, deployment, commit or push performed. Input validation now precedes database checks, and category checks precede product checks; multi-error requests can receive a different first error. See ADR-018. Catalog list pagination is not included.
+
+## Latest update: centralized business error codes (2026-09-29)
+
+- Added Domain.Common.ErrorCodes with all 23 existing business codes. Entities, handlers, catalog state/conflict translation, inventory persistence and controllers reference constants; a source scan found no repeated business-code literals outside that catalog in production code. Public string values remain unchanged.
+- BusinessErrorResponse now uses an immutable dictionary with explicit 400/404/409 assignments. Unknown codes are programming errors, not an implicit 400; HTTP tests confirm generic 500 responses without details for both Result and legacy MVC exception paths.
+- Added reflection-based coverage of every public string constant, duplicate-value detection, explicit public-contract checks and unknown-code tests. Transport/authentication codes remain in API.
+- Build passed with zero warnings/errors. Full suite against the existing InventoryManagement database: 229 passed (36 Domain, 43 Application, 115 API, 35 Infrastructure), zero failures and zero skipped. All 33 SQL cases passed.
+- Verified unchanged schema migrator/checksum implementation, InventoryReadDbContext, JWT authorization tests/factory, migration tests and read-context tests. Persistence edits only substitute business-code constants; transaction and lock behavior is unchanged. No schema/deployment changes, commit or push performed.
+
+## Latest update: explicit application results (2026-09-29)
+
+- Added immutable Application Error and Result<T>. Success exposes a non-null value; failure exposes an error. Accessing the opposite state throws a programming-error exception.
+- CreateProductCommandHandler returns Result<Guid>; GetProductInventoryQueryHandler returns Result<ProductInventoryDto>. Missing/inactive category, duplicate-SKU prechecks and missing balance results no longer throw from these handlers. Product creation adapts existing domain-validation/write-time DomainException instances to failures; technical exceptions and cancellation still propagate.
+- Controllers translate failures through BusinessErrorResponse and preserve existing success payloads, status codes and the code/message error envelope. ApiExceptionMiddleware handles technical errors and request cancellation; LegacyDomainExceptionFilter preserves MVC business-error responses for use cases not yet migrated. This is an incremental migration, not elimination of all DomainException usage (ADR-016).
+- Transactional stores remain unchanged: exceptions still trigger rollback before adaptation to Result. No failure-valued return was introduced inside CatalogTransaction.
+- Verified no changes to Infrastructure (including SchemaMigrator, SHA-256 normalization, schema journal, application lock, transactional DDL and InventoryReadDbContext), JwtAuthorizationTests/JwtApiFactory, SchemaMigrationTests or ReadOnlyContextTests.
+- Solution build passed with zero warnings/errors. The full suite against the existing InventoryManagement database passed 217 cases: 36 Domain, 43 Application, 103 API and 35 Infrastructure (33 SQL plus two read-context guards). Zero failures and zero skipped. Added coverage for result states, invalid error construction, write-time business conflicts, technical failures and cancellation; existing HTTP contracts and JWT cases passed unchanged in behavior.
+- No schema changes, Docker deployment, commit or push performed for this update. Catalog pagination, string-code centralization and migration of remaining use cases are outside this change.
+
 ## Latest update: development account (2026-09-22)
 
 - Created the requested adminInventory account in the existing Keycloak realm and verified all six API client-role assignments through the Admin REST API. Generated a cryptographically random password in local .env as INVENTORY_DEV_PASSWORD; credentials are not recorded here.

@@ -37,6 +37,30 @@ def authenticate(base):
     raise RuntimeError("Keycloak did not become ready within the startup window.")
 
 
+def configure_redirects(api, client_id, definition):
+    path = "/clients/" + client_id
+    current = api(path)
+    redirects = list(current.get("redirectUris", []))
+    for uri in definition.get("redirectUris", []):
+        if uri not in redirects:
+            redirects.append(uri)
+    attributes = dict(current.get("attributes", {}))
+    logout_key = "post.logout.redirect.uris"
+    logout_uris = attributes.get(logout_key, "").split("##") if attributes.get(logout_key) else []
+    for uri in definition.get("attributes", {}).get(logout_key, "").split("##"):
+        if uri and uri not in logout_uris:
+            logout_uris.append(uri)
+    if logout_uris:
+        attributes[logout_key] = "##".join(logout_uris)
+    if redirects != current.get("redirectUris", []) or attributes != current.get("attributes", {}):
+        api(path, "PUT", {"redirectUris": redirects, "attributes": attributes})
+    updated = api(path)
+    if set(updated.get("redirectUris", [])) != set(redirects) or any(
+        updated.get("attributes", {}).get(key) != value for key, value in attributes.items()
+    ):
+        raise RuntimeError("Client redirect verification failed.")
+
+
 def configure_client(api, definition):
     clients = api("/clients?" + urlencode({"clientId": definition["clientId"]}))
     if not clients:
@@ -45,6 +69,7 @@ def configure_client(api, definition):
     if len(clients) != 1:
         raise RuntimeError("Expected exactly one application client.")
     client_id = clients[0]["id"]
+    configure_redirects(api, client_id, definition)
     path = "/clients/" + client_id + "/protocol-mappers/models"
     existing = {mapper["name"]: mapper for mapper in api(path)}
     for mapper in definition.get("protocolMappers", []):

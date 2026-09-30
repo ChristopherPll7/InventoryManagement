@@ -11,9 +11,14 @@ public sealed class ProductQueries(InventoryReadDbContext dbContext) : IProductQ
         .Select(product => new ProductDto(product.Id, product.Name, product.Description, product.Sku, product.Price, product.CategoryId, product.IsActive, EF.Property<int>(product, "CurrentStock")))
         .SingleOrDefaultAsync(cancellationToken);
 
-    public async Task<IReadOnlyCollection<ProductDto>> GetAllAsync(CancellationToken cancellationToken) => await dbContext.Products
-        .AsNoTracking()
-        .OrderBy(product => product.Name)
-        .Select(product => new ProductDto(product.Id, product.Name, product.Description, product.Sku, product.Price, product.CategoryId, product.IsActive, EF.Property<int>(product, "CurrentStock")))
-        .ToListAsync(cancellationToken);
+    public async Task<PagedResult<ProductDto>> GetAllAsync(PageRequest pagination, CancellationToken cancellationToken)
+    {
+        var products = dbContext.Products.AsNoTracking();
+        var totalCount = await products.LongCountAsync(cancellationToken);
+        var items = await products.OrderBy(product => product.Name).ThenBy(product => product.Id)
+            .Skip(pagination.Offset).Take(pagination.PageSize)
+            .Select(product => new ProductDto(product.Id, product.Name, product.Description, product.Sku, product.Price, product.CategoryId, product.IsActive, EF.Property<int>(product, "CurrentStock")))
+            .ToListAsync(cancellationToken);
+        return new PagedResult<ProductDto>(items, pagination.Page, pagination.PageSize, totalCount);
+    }
 }

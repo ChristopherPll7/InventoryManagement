@@ -44,22 +44,27 @@ public sealed class Product
     public void EnsureActive()
     {
         if (!IsActive)
-            throw new DomainException("PRODUCT_INACTIVE", "The product is inactive.");
+            throw new DomainException(ErrorCodes.ProductInactive, "The product is inactive.");
     }
 
     private void SetDetails(string name, string? description, string sku, decimal price, Guid categoryId)
     {
-        var validName = TextValidation.Required(name, 150, "INVALID_PRODUCT_NAME", "Product name");
-        var validDescription = TextValidation.Optional(description, 1000, "INVALID_PRODUCT_DESCRIPTION", "Product description");
-        var validSku = TextValidation.Required(sku, 80, "INVALID_PRODUCT_SKU", "Product SKU").ToUpperInvariant();
-        if (price < 0 || price > 9999999999999999.99m || decimal.Round(price, 2) != price)
-            throw new DomainException("INVALID_PRODUCT_PRICE", "Product price must be between 0 and 9999999999999999.99 with at most two decimal places.");
-        if (categoryId == Guid.Empty)
-            throw new DomainException("INVALID_CATEGORY_ID", "A category identifier is required.");
-        Name = validName;
-        Description = validDescription;
-        Sku = validSku;
-        Price = price;
-        CategoryId = categoryId;
+        ApplyDetails(new ProductDetails(name, description, sku, price, categoryId));
+    }
+
+    public void Update(ProductDetails details)
+    {
+        ArgumentNullException.ThrowIfNull(details);
+        ApplyDetails(details);
+        UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
+    private void ApplyDetails(ProductDetails details)
+    {
+        Name = details.Name;
+        Description = details.Description;
+        Sku = details.Sku;
+        Price = details.Price;
+        CategoryId = details.CategoryId;
     }
 }

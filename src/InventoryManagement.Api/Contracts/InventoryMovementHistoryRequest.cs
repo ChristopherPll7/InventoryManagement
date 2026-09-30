@@ -13,6 +13,6 @@ public sealed class InventoryMovementHistoryRequest
     public int Page { get; init; } = 1;
     public int PageSize { get; init; } = InventoryMovementFilter.DefaultPageSize;
 
-    public InventoryMovementFilter ToFilter() =>
-        new(Type is null ? null : Enum.Parse<InventoryMovementType>(Type, true), StartDate, EndDate, Page, PageSize);
+    public GetProductInventoryMovementsQuery ToQuery(Guid productId) =>
+        new(productId, Type is null ? null : Enum.Parse<InventoryMovementType>(Type, true), StartDate, EndDate, Page, PageSize);
 }

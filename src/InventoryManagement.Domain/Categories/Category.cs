@@ -9,8 +9,8 @@ public sealed class Category
     private Category(Guid id, string name, string? description)
     {
         Id = id;
-        Name = TextValidation.Required(name, 150, "INVALID_CATEGORY_NAME", "Category name");
-        Description = TextValidation.Optional(description, 500, "INVALID_CATEGORY_DESCRIPTION", "Category description");
+        Name = TextValidation.Required(name, 150, ErrorCodes.InvalidCategoryName, "Category name");
+        Description = TextValidation.Optional(description, 500, ErrorCodes.InvalidCategoryDescription, "Category description");
         IsActive = true;
         CreatedAt = DateTimeOffset.UtcNow;
     }
@@ -26,8 +26,8 @@ public sealed class Category
 
     public void Update(string name, string? description)
     {
-        var validName = TextValidation.Required(name, 150, "INVALID_CATEGORY_NAME", "Category name");
-        var validDescription = TextValidation.Optional(description, 500, "INVALID_CATEGORY_DESCRIPTION", "Category description");
+        var validName = TextValidation.Required(name, 150, ErrorCodes.InvalidCategoryName, "Category name");
+        var validDescription = TextValidation.Optional(description, 500, ErrorCodes.InvalidCategoryDescription, "Category description");
         Name = validName;
         Description = validDescription;
         UpdatedAt = DateTimeOffset.UtcNow;
@@ -36,7 +36,7 @@ public sealed class Category
     public void Deactivate(bool hasActiveProducts)
     {
         if (hasActiveProducts)
-            throw new DomainException("CATEGORY_IN_USE", "The category contains active products.");
+            throw new DomainException(ErrorCodes.CategoryInUse, "The category contains active products.");
         if (!IsActive)
             return;
         IsActive = false;
@@ -46,6 +46,6 @@ public sealed class Category
     public void EnsureActive()
     {
         if (!IsActive)
-            throw new DomainException("CATEGORY_INACTIVE", "The category is inactive.");
+            throw new DomainException(ErrorCodes.CategoryInactive, "The category is inactive.");
     }
 }

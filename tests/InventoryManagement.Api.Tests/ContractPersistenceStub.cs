@@ -11,6 +11,7 @@ public sealed class ContractPersistenceStub : IProductCommandStore, IProductVali
     public bool DuplicateSku { get; set; }
     public string? InventoryError { get; set; }
     public string? ProductWriteError { get; set; }
+    public Exception? ProductTechnicalFailure { get; set; }
     public int WriteCount { get; private set; }
     public Product? Product { get; private set; }
 
@@ -20,6 +21,8 @@ public sealed class ContractPersistenceStub : IProductCommandStore, IProductVali
 
     public Task CreateAsync(Product product, CancellationToken cancellationToken)
     {
+        if (ProductTechnicalFailure is not null)
+            throw ProductTechnicalFailure;
         if (ProductWriteError is not null)
             throw new DomainException(ProductWriteError, "Product write rejected.");
         WriteCount++;
@@ -28,16 +31,26 @@ public sealed class ContractPersistenceStub : IProductCommandStore, IProductVali
     }
 
     public Task<ProductDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken) => Task.FromResult(Product?.Id == id ? MapProduct(Product) : null);
-    public Task<IReadOnlyCollection<ProductDto>> GetAllAsync(CancellationToken cancellationToken) =>
-        Task.FromResult<IReadOnlyCollection<ProductDto>>(Product is null ? [] : [MapProduct(Product)]);
+    public Task<PagedResult<ProductDto>> GetAllAsync(PageRequest pagination, CancellationToken cancellationToken) =>
+        Task.FromResult(new PagedResult<ProductDto>(
+            Product is null || pagination.Page > 1 ? [] : [MapProduct(Product)],
+            pagination.Page, pagination.PageSize, Product is null ? 0 : 1));
 
-    public Task<ProductDto> UpdateAsync(Product product, CancellationToken cancellationToken)
+    public Task<ProductDto> UpdateAsync(Guid id, ProductDetails details, CancellationToken cancellationToken)
     {
         if (ProductWriteError is not null)
             throw new DomainException(ProductWriteError, "Product write rejected.");
-        Product = product;
+        if (DuplicateSku)
+            throw new DomainException(ErrorCodes.DuplicateProductSku, "The SKU is already in use.");
+        if (CategoryIsActive is null)
+            throw new DomainException(ErrorCodes.CategoryNotFound, "The category was not found.");
+        if (CategoryIsActive == false)
+            throw new DomainException(ErrorCodes.CategoryInactive, "The category is inactive.");
+        if (Product?.Id != id)
+            throw new DomainException(ErrorCodes.ProductNotFound, "The product was not found.");
+        Product.Update(details);
         WriteCount++;
-        return Task.FromResult(MapProduct(product));
+        return Task.FromResult(MapProduct(Product));
     }
 
     public Task DeactivateAsync(Guid id, CancellationToken cancellationToken)

@@ -1,5 +1,50 @@
 # Architecture Decisions
 
+## ADR-020: Explicit results across all business handlers
+
+- Problem: the remaining catalog and inventory handlers expose expected business failures through exceptions and require an MVC compatibility filter.
+- Options: change domain/store transaction contracts; adapt those contracts at every Application boundary.
+- AI recommendation: complete handler result contracts while preserving existing transactional safeguards.
+- Decision: all 13 handlers return Result<T>. Application prechecks return failures directly; BusinessResult adapts DomainException from validation and persistence. Stores still throw so rollback completes before adaptation. Controllers unwrap success values and map failures through BusinessErrorResponse. Movement-history queries carry raw filter values validated inside the handler; the MVC compatibility filter is removed.
+- Reason: expected failures are explicit to callers without coupling Domain to Application or altering HTTP success/error contracts.
+- Trade-offs: domain factories, pagination validation and stores still use exceptions internally, so their exception cost remains. Technical exceptions and cancellation must propagate. This supersedes the partial-handler and compatibility-filter limitations in ADR-016 and ADR-018. Schema migration, JWT authorization tests and read-context guards remain unchanged.
+
+## ADR-019: Bounded catalog lists
+
+- Problem: product/category list queries materialize entire tables despite bounded movement history.
+- Options: retain arrays; introduce cursor pagination; reuse the page/pageSize and PagedResult contract.
+- AI recommendation: bounded offset pagination with shared limits and deterministic ordering.
+- Decision: PageRequest owns validation and limits (page 1–10000, pageSize 1–100, default size 20), reused by inventory history. Catalog handlers validate before persistence; EF performs count and ordered Skip/Take before projection/materialization. Product/category order is Name then Id. Inactive records remain included. Controllers advertise paged responses; Postman assertions use items and metadata.
+- Reason: bounds response size and avoids divergent pagination rules while preserving the existing inventory contract.
+- Trade-offs: catalog response shape changes from array to envelope, requiring client updates. Count/page queries do not share a snapshot and offset pages can shift under concurrent writes. Maximum page bounds browsing; filtering or cursors remain future work. Existing schema indexes and migration scripts are unchanged.
+
+## ADR-018: Validated product details and transactional catalog checks
+
+- Problem: product update reads and mutates an entity in Application, then rereads and validates it again under transaction locks in Infrastructure.
+- Options: retain optimistic prechecks; rely only on application checks; pass immutable validated editable details to the transactional store.
+- AI recommendation: validate input once through a domain value object and evaluate database-dependent rules under locks.
+- Decision: ProductDetails centralizes the existing text, SKU normalization, price and category-ID rules. Product creation and the existing primitive Update overload use that same validation. UpdateProductCommandHandler depends only on IProductCommandStore and passes the product ID plus ProductDetails. The store locks/validates the target category, locks the product and applies the already validated details without revalidating them. SQL uniqueness and existing conflict translation enforce duplicate SKU rejection. Stock, activation state and creation time are not part of the editable details.
+- Reason: removes stale entity transfer and redundant application reads while retaining Serializable, UPDLOCK/HOLDLOCK and EF-read/Dapper-write behavior. Domain still owns field invariants; Infrastructure coordinates their application to current transactional state.
+- Trade-offs: input errors now precede existence checks; the existing store checks category before product to preserve lock order. Requests with multiple invalid conditions may therefore report a different first error. Update still uses its existing DomainException contract and MVC compatibility filter; this change does not expand the Result migration or add list pagination. A final EF projection remains to return persisted stock.
+
+## ADR-017: Explicit business error catalog and HTTP mapping
+
+- Problem: repeated string literals and an implicit 400 fallback can hide spelling mistakes and unmapped business errors.
+- Options: keep independent strings; introduce Domain constants and an exhaustive API mapping; introduce a new typed error hierarchy.
+- AI recommendation: centralize existing public codes and require explicit mapping without changing response contracts.
+- Decision: Domain.Common.ErrorCodes defines the 23 business codes used by entities, Application, persistence and controllers. BusinessErrorResponse uses an immutable dictionary keyed by those constants. Missing mappings throw a programming-error exception, handled as a generic HTTP 500 by the technical middleware. HTTP/authentication-specific codes stay in API.
+- Reason: preserves public code values and dependency direction while removing repeated production literals. A reflection-based test enumerates all public string constants and requires a mapping; independent literal-based contract tests retain compatibility checks. HTTP tests verify unknown codes produce 500 in both Result and legacy exception paths without leaking details.
+- Trade-offs: constants still have string values and mapping completeness is enforced by tests rather than the C# type system. Adding a business code requires an explicit status decision. Domain has no knowledge of HTTP.
+
+## ADR-016: Incremental migration to explicit application results
+
+- Problem: expected business failures are hidden in successful-looking handler return types and propagate to HTTP through exceptions.
+- Options: migrate every domain/store contract at once; expose explicit results for selected use cases while adapting existing domain/store failures at their boundaries.
+- AI recommendation: migrate product creation and inventory balance retrieval first, preserving transactional safeguards and HTTP contracts.
+- Decision: Application defines immutable Error (code/message) and Result<T> with mutually exclusive success/failure states. CreateProductCommandHandler and GetProductInventoryQueryHandler return results. Product category/SKU prechecks and missing balance queries return failures directly. Creation adapts DomainException from existing domain validation and transactional stores into a failure only after those operations finish unwinding. Technical exceptions and cancellation propagate unchanged. Controllers use one API error mapper; the exception middleware handles technical failures and request cancellation only.
+- Reason: makes the two use-case contracts explicit without introducing Application dependencies into Domain or changing the SQL transaction protocol. The mapper preserves existing HTTP statuses and error envelopes.
+- Trade-offs: migration is intentionally partial. Existing domain factories and command stores still throw DomainException; a narrowly scoped LegacyDomainExceptionFilter preserves business responses for MVC actions not yet migrated. This does not eliminate exception costs inside those components. No store starts returning failure results, so CatalogTransaction cannot accidentally commit a failed result. String-code centralization, complete mapping coverage and remaining handlers are separate work. Schema migration, JWT policies/tests and read-context guards are unchanged.
+
 ## ADR-001: Persist the current inventory balance
 
 - Problem: calculate stock from all movements or persist the current balance.

@@ -4,19 +4,32 @@ using InventoryManagement.Domain.Products;
 
 namespace InventoryManagement.Application.Products;
 
-public sealed class CreateProductCommandHandler(IProductCommandStore store, IProductValidationQueries queries) : ICommandHandler<CreateProductCommand, Guid>
+public sealed class CreateProductCommandHandler(IProductCommandStore store, IProductValidationQueries queries) : ICommandHandler<CreateProductCommand, Result<Guid>>
 {
-    public async Task<Guid> HandleAsync(CreateProductCommand command, CancellationToken cancellationToken)
+    public async Task<Result<Guid>> HandleAsync(CreateProductCommand command, CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await CreateAsync(command, cancellationToken);
+        }
+        catch (DomainException exception)
+        {
+            // Transactional stores complete rollback before business errors are adapted here.
+            return Result<Guid>.Failure(new Error(exception.Code, exception.Message));
+        }
+    }
+
+    private async Task<Result<Guid>> CreateAsync(CreateProductCommand command, CancellationToken cancellationToken)
     {
         var product = Product.Create(command.Name, command.Description, command.Sku, command.Price, command.CategoryId);
         var categoryIsActive = await queries.GetCategoryActiveStateAsync(product.CategoryId, cancellationToken);
         if (categoryIsActive is null)
-            throw new DomainException("CATEGORY_NOT_FOUND", "The category was not found.");
+            return Result<Guid>.Failure(new Error(ErrorCodes.CategoryNotFound, "The category was not found."));
         if (!categoryIsActive.Value)
-            throw new DomainException("CATEGORY_INACTIVE", "The category is inactive.");
+            return Result<Guid>.Failure(new Error(ErrorCodes.CategoryInactive, "The category is inactive."));
         if (await queries.SkuExistsAsync(product.Sku, cancellationToken))
-            throw new DomainException("DUPLICATE_PRODUCT_SKU", "The SKU is already in use.");
+            return Result<Guid>.Failure(new Error(ErrorCodes.DuplicateProductSku, "The SKU is already in use."));
         await store.CreateAsync(product, cancellationToken);
-        return product.Id;
+        return Result<Guid>.Success(product.Id);
     }
 }

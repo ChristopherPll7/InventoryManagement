@@ -1,3 +1,4 @@
+using InventoryManagement.Application.Abstractions;
 using InventoryManagement.Domain.Common;
 using InventoryManagement.Domain.Inventory;
 using InventoryManagement.Domain.Products;
@@ -160,7 +161,7 @@ public sealed class PersistenceContractTests(SqlServerFixture database)
         await using var db = database.CreateReadContext();
         var queries = new ProductQueries(db);
         Assert.NotNull(await queries.GetByIdAsync(product.Id, default));
-        Assert.Contains(await queries.GetAllAsync(default), item => item.Id == product.Id);
+        Assert.Contains((await queries.GetAllAsync(new PageRequest(1, 100), default)).Items, item => item.Id == product.Id);
         var validation = new ProductValidationQueries(db);
         Assert.True(await validation.SkuExistsAsync(product.Sku, default));
         Assert.True(await validation.GetCategoryActiveStateAsync(product.CategoryId, default));

@@ -4,6 +4,8 @@ Initial implementation based on the domain specification. It uses Clean Architec
 
 ## Architecture
 
+Business error codes are centralized in Domain.Common.ErrorCodes. The API maps every code explicitly in BusinessErrorResponse; unmapped codes become internal errors rather than silently returning 400. Tests enumerate the catalog to detect missing mappings (ADR-017). Public code strings and existing mapped statuses are preserved.
+
 - `Domain`: entities and invariants without infrastructure dependencies.
 - `Application`: commands, queries, handlers and persistence ports.
 - `Infrastructure`: EF Core read model and transactional Dapper writes.
@@ -11,6 +13,8 @@ Initial implementation based on the domain specification. It uses Clean Architec
 - `Domain.Tests`: independent unit tests for domain behavior.
 
 The inventory balance is persisted in `Products.CurrentStock`. Inventory movements use a serializable SQL transaction plus `UPDLOCK` and `HOLDLOCK`. The database also has a `CHECK (CurrentStock >= 0)` constraint as a final safety barrier.
+
+All 13 business handlers return Application `Result<T>` values with immutable code/message errors. Controllers translate failures into the existing HTTP error envelope; success payloads and statuses are unchanged. Domain/store exceptions are adapted at handler boundaries after transactional rollback; technical failures and cancellation propagate unchanged. History filter validation runs inside its handler. The MVC compatibility filter has been removed. Internal domain/store exceptions remain; the exception middleware handles technical failures (ADR-020).
 
 ## Run with Docker
 
@@ -43,6 +47,10 @@ The SQL test account also needs permission to create test triggers and observe b
 The API accepts inventory movement types as the strings `Entry` and `Exit`. Invalid requests return `{ "code": "...", "message": "..." }`. Product prices must fit `decimal(18,2)` exactly; values requiring rounding are rejected. Missing resources return 404, inactive resources and duplicate SKUs return 409.
 
 ## Category and product lifecycle
+
+`GET /api/products` and `GET /api/categories` return a paged object: `{ items, page, pageSize, totalCount, totalPages }`, replacing the previous bare array. Clients must read `items` and request subsequent pages. Query parameters are `page` (default 1, range 1–10000) and `pageSize` (default 20, range 1–100), sharing history limits. Both lists include inactive records and order by `Name ASC, Id ASC`. Out-of-range parameters return 400 (`INVALID_PAGINATION`); malformed values return 400 (`INVALID_REQUEST`). Empty and beyond-last pages have empty items while retaining the matching total. Count and items are separate reads, not a snapshot under concurrent changes.
+
+Product updates validate editable fields once in immutable Domain `ProductDetails`. The handler sends only those details and the product ID to the store. Category activity and product existence are checked under transaction locks; SKU uniqueness is enforced by SQL. Invalid input is rejected before database access, and the store checks the target category before the product (ADR-018).
 
 All business endpoints require authentication. Category CRUD is available at `/api/categories` and `/api/categories/{id}`. POST returns 201 with a Location header, GET returns 200, PUT returns the updated category with 200, and DELETE returns 204. POST/PUT accept a required `name` and optional `description`.
 

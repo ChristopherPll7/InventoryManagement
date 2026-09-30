@@ -11,6 +11,9 @@ internal sealed class ProductPersistenceStub : IProductCommandStore, IProductVal
     public Product? CreatedProduct { get; private set; }
     public string? CheckedSku { get; private set; }
     public int ReadCount { get; private set; }
+    public Exception? UpdateError { get; init; }
+    public ProductDetails? ReceivedDetails { get; private set; }
+    public Exception? CreateError { get; init; }
     public Product? ExistingProduct { get; init; }
     public Product? UpdatedProduct { get; private set; }
     public Guid? ExcludedProductId { get; private set; }
@@ -31,6 +34,8 @@ internal sealed class ProductPersistenceStub : IProductCommandStore, IProductVal
 
     public Task CreateAsync(Product product, CancellationToken cancellationToken)
     {
+        if (CreateError is not null)
+            return Task.FromException(CreateError);
         CreatedProduct = product;
         return Task.CompletedTask;
     }
@@ -38,10 +43,16 @@ internal sealed class ProductPersistenceStub : IProductCommandStore, IProductVal
     public Task<Product?> GetProductAsync(Guid id, CancellationToken cancellationToken) =>
         Task.FromResult(ExistingProduct?.Id == id ? ExistingProduct : null);
 
-    public Task<ProductDto> UpdateAsync(Product product, CancellationToken cancellationToken)
+    public Task<ProductDto> UpdateAsync(Guid id, ProductDetails details, CancellationToken cancellationToken)
     {
-        UpdatedProduct = product;
-        return Task.FromResult(new ProductDto(product.Id, product.Name, product.Description, product.Sku, product.Price, product.CategoryId, product.IsActive, 0));
+        if (UpdateError is not null)
+            return Task.FromException<ProductDto>(UpdateError);
+        if (ExistingProduct?.Id != id)
+            throw new DomainException(ErrorCodes.ProductNotFound, "The product was not found.");
+        ReceivedDetails = details;
+        ExistingProduct.Update(details);
+        UpdatedProduct = ExistingProduct;
+        return Task.FromResult(new ProductDto(id, details.Name, details.Description, details.Sku, details.Price, details.CategoryId, ExistingProduct.IsActive, 0));
     }
 
     public Task DeactivateAsync(Guid id, CancellationToken cancellationToken)

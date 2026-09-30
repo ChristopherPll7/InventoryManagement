@@ -46,8 +46,10 @@ public sealed class CategoryPersistenceStub : ICategoryCommandStore, ICategoryQu
     public Task<CategoryDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken) =>
         Task.FromResult(Category?.Id == id ? CategoryDto.FromCategory(Category) : null);
 
-    public Task<IReadOnlyCollection<CategoryDto>> GetAllAsync(CancellationToken cancellationToken) =>
-        Task.FromResult<IReadOnlyCollection<CategoryDto>>(Category is null ? [] : [CategoryDto.FromCategory(Category)]);
+    public Task<PagedResult<CategoryDto>> GetAllAsync(PageRequest pagination, CancellationToken cancellationToken) =>
+        Task.FromResult(new PagedResult<CategoryDto>(
+            Category is null || pagination.Page > 1 ? [] : [CategoryDto.FromCategory(Category)],
+            pagination.Page, pagination.PageSize, Category is null ? 0 : 1));
 
     public Task<bool> NameExistsAsync(string name, CancellationToken cancellationToken, Guid? excludingCategoryId = null)
     {

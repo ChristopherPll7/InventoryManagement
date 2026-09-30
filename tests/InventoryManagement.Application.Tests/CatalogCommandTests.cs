@@ -9,11 +9,22 @@ namespace InventoryManagement.Application.Tests;
 public sealed class CatalogCommandTests
 {
     [Fact]
+    public async Task InvalidProductDetailsNeverReachTheStore()
+    {
+        var store = new ProductPersistenceStub();
+        var error = await new UpdateProductCommandHandler(store).HandleAsync(
+            new UpdateProductCommand(Guid.NewGuid(), "Product", null, "SKU", 1.001m, Guid.NewGuid()), default);
+        Assert.Equal("INVALID_PRODUCT_PRICE", error.Error.Code);
+        Assert.Null(store.ReceivedDetails);
+        Assert.Equal(0, store.ReadCount);
+    }
+
+    [Fact]
     public async Task CategoryCreateValidatesAndReturnsPersistedIdentifier()
     {
         var store = new CategoryPersistenceStub();
         var id = await new CreateCategoryCommandHandler(store, store).HandleAsync(new CreateCategoryCommand(" Tools ", null), default);
-        Assert.Equal(id, store.Category!.Id);
+        Assert.Equal(id.Value, store.Category!.Id);
         Assert.Equal("Tools", store.Category.Name);
         Assert.Equal(1, store.WriteCount);
     }
@@ -22,9 +33,8 @@ public sealed class CatalogCommandTests
     public async Task CategoryDuplicateIsRejectedBeforeWriting()
     {
         var store = new CategoryPersistenceStub { DuplicateName = true };
-        var error = await Assert.ThrowsAsync<DomainException>(() =>
-            new CreateCategoryCommandHandler(store, store).HandleAsync(new CreateCategoryCommand("Tools", null), default));
-        Assert.Equal("DUPLICATE_CATEGORY_NAME", error.Code);
+        var error = await new CreateCategoryCommandHandler(store, store).HandleAsync(new CreateCategoryCommand("Tools", null), default);
+        Assert.Equal("DUPLICATE_CATEGORY_NAME", error.Error.Code);
         Assert.Equal(0, store.WriteCount);
     }
 
@@ -36,43 +46,43 @@ public sealed class CatalogCommandTests
         await store.CreateAsync(category, default);
         var result = await new UpdateCategoryCommandHandler(store, store).HandleAsync(new UpdateCategoryCommand(category.Id, "Tools", "Updated"), default);
         Assert.Equal(category.Id, store.ExcludedCategoryId);
-        Assert.Equal("Updated", result.Description);
+        Assert.Equal("Updated", result.Value.Description);
     }
 
     [Fact]
     public async Task MissingCategoryUpdateIsNotFound()
     {
         var store = new CategoryPersistenceStub();
-        var error = await Assert.ThrowsAsync<DomainException>(() =>
-            new UpdateCategoryCommandHandler(store, store).HandleAsync(new UpdateCategoryCommand(Guid.NewGuid(), "Tools", null), default));
-        Assert.Equal("CATEGORY_NOT_FOUND", error.Code);
+        var error = await new UpdateCategoryCommandHandler(store, store).HandleAsync(new UpdateCategoryCommand(Guid.NewGuid(), "Tools", null), default);
+        Assert.Equal("CATEGORY_NOT_FOUND", error.Error.Code);
         Assert.Equal(0, store.WriteCount);
     }
 
     [Fact]
-    public async Task ProductUpdateNormalizesSkuAndExcludesItself()
+    public async Task ProductUpdatePassesNormalizedDetailsWithoutValidationQueries()
     {
         var product = Product.Create("Product", null, "SKU", 1, Guid.NewGuid());
         var store = new ProductPersistenceStub { ExistingProduct = product };
-        var result = await new UpdateProductCommandHandler(store, store).HandleAsync(
+        var result = await new UpdateProductCommandHandler(store).HandleAsync(
             new UpdateProductCommand(product.Id, " Updated ", "Details", " sku ", 2, product.CategoryId), default);
-        Assert.Equal(product.Id, store.ExcludedProductId);
-        Assert.Equal("SKU", store.CheckedSku);
-        Assert.Equal("Updated", result.Name);
-        Assert.Equal(2, result.Price);
+        Assert.Equal(0, store.ReadCount);
+        Assert.Null(store.CheckedSku);
+        Assert.Equal("SKU", store.ReceivedDetails!.Sku);
+        Assert.Equal("Updated", result.Value.Name);
+        Assert.Equal(2, result.Value.Price);
         Assert.NotNull(store.UpdatedProduct);
     }
 
     [Theory]
-    [InlineData(null, "CATEGORY_NOT_FOUND")]
-    [InlineData(false, "CATEGORY_INACTIVE")]
-    public async Task ProductUpdateRequiresExistingActiveCategory(bool? categoryIsActive, string code)
+    [InlineData("CATEGORY_NOT_FOUND")]
+    [InlineData("CATEGORY_INACTIVE")]
+    public async Task ProductUpdatePropagatesTransactionalCategoryFailure(string code)
     {
         var product = Product.Create("Product", null, "SKU", 1, Guid.NewGuid());
-        var store = new ProductPersistenceStub { ExistingProduct = product, CategoryIsActive = categoryIsActive };
-        var error = await Assert.ThrowsAsync<DomainException>(() => new UpdateProductCommandHandler(store, store).HandleAsync(
-            new UpdateProductCommand(product.Id, "Updated", null, "SKU", 2, Guid.NewGuid()), default));
-        Assert.Equal(code, error.Code);
+        var store = new ProductPersistenceStub { ExistingProduct = product, UpdateError = new DomainException(code, "Store rejected category.") };
+        var error = await new UpdateProductCommandHandler(store).HandleAsync(
+            new UpdateProductCommand(product.Id, "Updated", null, "SKU", 2, Guid.NewGuid()), default);
+        Assert.Equal(code, error.Error.Code);
         Assert.Null(store.UpdatedProduct);
     }
 
@@ -80,10 +90,10 @@ public sealed class CatalogCommandTests
     public async Task ProductUpdateRejectsDuplicateSku()
     {
         var product = Product.Create("Product", null, "SKU", 1, Guid.NewGuid());
-        var store = new ProductPersistenceStub { ExistingProduct = product, DuplicateSku = true };
-        var error = await Assert.ThrowsAsync<DomainException>(() => new UpdateProductCommandHandler(store, store).HandleAsync(
-            new UpdateProductCommand(product.Id, "Updated", null, "DUPLICATE", 2, product.CategoryId), default));
-        Assert.Equal("DUPLICATE_PRODUCT_SKU", error.Code);
+        var store = new ProductPersistenceStub { ExistingProduct = product, UpdateError = new DomainException("DUPLICATE_PRODUCT_SKU", "Store rejected SKU.") };
+        var error = await new UpdateProductCommandHandler(store).HandleAsync(
+            new UpdateProductCommand(product.Id, "Updated", null, "DUPLICATE", 2, product.CategoryId), default);
+        Assert.Equal("DUPLICATE_PRODUCT_SKU", error.Error.Code);
         Assert.Null(store.UpdatedProduct);
     }
 
@@ -91,9 +101,9 @@ public sealed class CatalogCommandTests
     public async Task MissingProductUpdateIsNotFound()
     {
         var store = new ProductPersistenceStub();
-        var error = await Assert.ThrowsAsync<DomainException>(() => new UpdateProductCommandHandler(store, store).HandleAsync(
-            new UpdateProductCommand(Guid.NewGuid(), "Updated", null, "SKU", 2, Guid.NewGuid()), default));
-        Assert.Equal("PRODUCT_NOT_FOUND", error.Code);
+        var error = await new UpdateProductCommandHandler(store).HandleAsync(
+            new UpdateProductCommand(Guid.NewGuid(), "Updated", null, "SKU", 2, Guid.NewGuid()), default);
+        Assert.Equal("PRODUCT_NOT_FOUND", error.Error.Code);
         Assert.Null(store.UpdatedProduct);
     }
 
@@ -113,9 +123,8 @@ public sealed class CatalogCommandTests
         var store = new CategoryPersistenceStub { HasActiveProducts = true };
         var category = Category.Create("Tools", null);
         await store.CreateAsync(category, default);
-        var error = await Assert.ThrowsAsync<DomainException>(() =>
-            new DeleteCategoryCommandHandler(store).HandleAsync(new DeleteCategoryCommand(category.Id), default));
-        Assert.Equal("CATEGORY_IN_USE", error.Code);
+        var error = await new DeleteCategoryCommandHandler(store).HandleAsync(new DeleteCategoryCommand(category.Id), default);
+        Assert.Equal("CATEGORY_IN_USE", error.Error.Code);
         Assert.True(category.IsActive);
     }
 }

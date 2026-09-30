@@ -2,11 +2,12 @@ using InventoryManagement.Application.Abstractions;
 
 namespace InventoryManagement.Application.Categories;
 
-public sealed class DeleteCategoryCommandHandler(ICategoryCommandStore store) : ICommandHandler<DeleteCategoryCommand, CommandCompleted>
+public sealed class DeleteCategoryCommandHandler(ICategoryCommandStore store) : ICommandHandler<DeleteCategoryCommand, Result<CommandCompleted>>
 {
-    public async Task<CommandCompleted> HandleAsync(DeleteCategoryCommand command, CancellationToken cancellationToken)
-    {
-        await store.DeactivateAsync(command.Id, cancellationToken);
-        return new CommandCompleted();
-    }
+    public Task<Result<CommandCompleted>> HandleAsync(DeleteCategoryCommand command, CancellationToken cancellationToken) =>
+        BusinessResult.ExecuteAsync<CommandCompleted>(async () =>
+        {
+            await store.DeactivateAsync(command.Id, cancellationToken);
+            return Result<CommandCompleted>.Success(new CommandCompleted());
+        });
 }

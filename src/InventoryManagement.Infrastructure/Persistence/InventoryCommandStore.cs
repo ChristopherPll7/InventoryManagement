@@ -42,7 +42,7 @@ public sealed class InventoryCommandStore(SqlConnectionFactory connectionFactory
             .Select(product => new { Product = product, CurrentStock = EF.Property<int>(product, "CurrentStock") })
             .SingleOrDefaultAsync(cancellationToken);
         if (state is null)
-            throw new DomainException("PRODUCT_NOT_FOUND", "The product was not found.");
+            throw new DomainException(ErrorCodes.ProductNotFound, "The product was not found.");
         state.Product.EnsureActive();
         return state.CurrentStock;
     }
