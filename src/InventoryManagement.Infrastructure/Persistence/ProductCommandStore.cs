@@ -18,12 +18,12 @@ public sealed class ProductCommandStore(SqlConnectionFactory connectionFactory) 
             return await db.Database.GetDbConnection().ExecuteAsync(new CommandDefinition(sql, product, transaction, cancellationToken: cancellationToken));
         }, cancellationToken);
 
-    public Task<ProductDto> UpdateAsync(Product product, CancellationToken cancellationToken) =>
+    public Task<ProductDto> UpdateAsync(Guid id, ProductDetails details, CancellationToken cancellationToken) =>
         CatalogTransaction.ExecuteAsync(connectionFactory, async (db, transaction) =>
         {
-            await CatalogState.EnsureCategoryActiveAsync(db, product.CategoryId, cancellationToken);
-            var current = await CatalogState.GetProductAsync(db, product.Id, cancellationToken);
-            current.Update(product.Name, product.Description, product.Sku, product.Price, product.CategoryId);
+            await CatalogState.EnsureCategoryActiveAsync(db, details.CategoryId, cancellationToken);
+            var current = await CatalogState.GetProductAsync(db, id, cancellationToken);
+            current.Update(details);
             const string sql = """
                 UPDATE Products SET Name = @Name, Description = @Description, Sku = @Sku,
                     Price = @Price, CategoryId = @CategoryId, UpdatedAt = @UpdatedAt WHERE Id = @Id

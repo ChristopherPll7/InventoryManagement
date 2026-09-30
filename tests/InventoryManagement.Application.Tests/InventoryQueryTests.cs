@@ -49,7 +49,8 @@ public sealed class InventoryQueryTests
         var inventory = new ProductInventoryDto(Guid.NewGuid(), "SKU", "Product", 0);
         var queries = new InventoryQueriesStub { Inventory = inventory };
         var result = await new GetProductInventoryQueryHandler(queries).HandleAsync(new GetProductInventoryQuery(inventory.ProductId), default);
-        Assert.Equal(inventory, result);
+        Assert.True(result.IsSuccess);
+        Assert.Equal(inventory, result.Value);
         Assert.Equal(inventory.ProductId, queries.LastProductId);
     }
 
@@ -58,12 +59,11 @@ public sealed class InventoryQueryTests
     {
         var queries = new InventoryQueriesStub();
         var id = Guid.NewGuid();
-        var balanceError = await Assert.ThrowsAsync<DomainException>(() =>
-            new GetProductInventoryQueryHandler(queries).HandleAsync(new GetProductInventoryQuery(id), default));
-        var historyError = await Assert.ThrowsAsync<DomainException>(() =>
-            new GetProductInventoryMovementsQueryHandler(queries).HandleAsync(new GetProductInventoryMovementsQuery(id, new InventoryMovementFilter()), default));
-        Assert.Equal("PRODUCT_NOT_FOUND", balanceError.Code);
-        Assert.Equal("PRODUCT_NOT_FOUND", historyError.Code);
+        var balanceResult = await new GetProductInventoryQueryHandler(queries).HandleAsync(new GetProductInventoryQuery(id), default);
+        var historyError = await new GetProductInventoryMovementsQueryHandler(queries).HandleAsync(new GetProductInventoryMovementsQuery(id), default);
+        Assert.True(balanceResult.IsFailure);
+        Assert.Equal("PRODUCT_NOT_FOUND", balanceResult.Error.Code);
+        Assert.Equal("PRODUCT_NOT_FOUND", historyError.Error.Code);
     }
 
     [Fact]
@@ -72,12 +72,13 @@ public sealed class InventoryQueryTests
         var inventory = new ProductInventoryDto(Guid.NewGuid(), "SKU", "Product", 0);
         var queries = new InventoryQueriesStub { Inventory = inventory };
         var filter = new InventoryMovementFilter(InventoryMovementType.Exit, page: 2, pageSize: 5);
-        var result = await new GetProductInventoryMovementsQueryHandler(queries).HandleAsync(new GetProductInventoryMovementsQuery(inventory.ProductId, filter), default);
-        Assert.Empty(result.Items);
-        Assert.Equal(0, result.TotalCount);
-        Assert.Equal(0, result.TotalPages);
-        Assert.Equal(2, result.Page);
-        Assert.Same(filter, queries.LastFilter);
+        var result = await new GetProductInventoryMovementsQueryHandler(queries).HandleAsync(new GetProductInventoryMovementsQuery(inventory.ProductId, filter.Type, filter.StartDate, filter.EndDate, filter.Page, filter.PageSize), default);
+        Assert.Empty(result.Value.Items);
+        Assert.Equal(0, result.Value.TotalCount);
+        Assert.Equal(0, result.Value.TotalPages);
+        Assert.Equal(2, result.Value.Page);
+        Assert.Equal(filter.Type, queries.LastFilter!.Type);
+        Assert.Equal(filter.PageSize, queries.LastFilter.PageSize);
     }
 
     [Theory]

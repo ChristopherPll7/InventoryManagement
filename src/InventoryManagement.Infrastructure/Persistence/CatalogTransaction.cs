@@ -35,9 +35,9 @@ internal static class CatalogTransaction
         if (exception.Number is 2601 or 2627)
         {
             if (exception.Message.Contains("UQ_Products_Sku", StringComparison.Ordinal))
-                return new DomainException("DUPLICATE_PRODUCT_SKU", "The SKU is already in use.");
+                return new DomainException(ErrorCodes.DuplicateProductSku, "The SKU is already in use.");
             if (exception.Message.Contains("UQ_Categories_Name", StringComparison.Ordinal))
-                return new DomainException("DUPLICATE_CATEGORY_NAME", "The category name is already in use.");
+                return new DomainException(ErrorCodes.DuplicateCategoryName, "The category name is already in use.");
         }
         return null;
     }

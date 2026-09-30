@@ -136,7 +136,7 @@
                 "exec": [
                   "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
                   "const data = pm.response.json();",
-                  "pm.test(\"Created category is listed\", () => { pm.expect(data.some(x => x.id === pm.collectionVariables.get(\"categoryId\"))).to.eql(true); });"
+                  "pm.test(\"Paginated catalog contract\", () => { pm.expect(data.items).to.be.an(\"array\"); pm.expect(data.items.length).to.be.at.most(data.pageSize); pm.expect(data.page).to.eql(1); pm.expect(data.pageSize).to.eql(20); pm.expect(data.totalCount).to.be.at.least(1); });"
                 ]
               }
             }
@@ -323,7 +323,7 @@
                 "exec": [
                   "pm.test(\"HTTP 200\", () => pm.response.to.have.status(200));",
                   "const data = pm.response.json();",
-                  "pm.test(\"Created product is listed\", () => { pm.expect(data.some(x => x.id === pm.collectionVariables.get(\"productId\"))).to.eql(true); });"
+                  "pm.test(\"Paginated catalog contract\", () => { pm.expect(data.items).to.be.an(\"array\"); pm.expect(data.items.length).to.be.at.most(data.pageSize); pm.expect(data.page).to.eql(1); pm.expect(data.pageSize).to.eql(20); pm.expect(data.totalCount).to.be.at.least(1); });"
                 ]
               }
             }

@@ -15,7 +15,7 @@ namespace InventoryManagement.Api.Controllers;
 [ProducesResponseType(typeof(ApiError), StatusCodes.Status404NotFound)]
 [ProducesResponseType(typeof(ApiError), StatusCodes.Status409Conflict)]
 [ProducesResponseType(typeof(ApiError), StatusCodes.Status500InternalServerError)]
-public sealed class InventoryController(ICommandHandler<RegisterInventoryMovementCommand, InventoryMovementResult> handler) : ControllerBase
+public sealed class InventoryController(ICommandHandler<RegisterInventoryMovementCommand, Result<InventoryMovementResult>> handler) : ControllerBase
 {
     [HttpPost("movements")]
     [Authorize(Policy = Permissions.InventoryWrite)]
@@ -23,20 +23,26 @@ public sealed class InventoryController(ICommandHandler<RegisterInventoryMovemen
     {
         var command = new RegisterInventoryMovementCommand(request.ProductId, request.Type, request.Quantity, request.Reason);
         var result = await handler.HandleAsync(command, cancellationToken);
-        return StatusCode(StatusCodes.Status201Created, result);
+        return result.IsSuccess ? StatusCode(StatusCodes.Status201Created, result.Value) : BusinessErrorResponse.From(result.Error);
     }
 
     [HttpGet("products/{productId:guid}")]
     [Authorize(Policy = Permissions.InventoryRead)]
     [ProducesResponseType(typeof(ProductInventoryDto), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetProductInventory(Guid productId,
-        [FromServices] IQueryHandler<GetProductInventoryQuery, ProductInventoryDto> queryHandler, CancellationToken cancellationToken) =>
-        Ok(await queryHandler.HandleAsync(new GetProductInventoryQuery(productId), cancellationToken));
+        [FromServices] IQueryHandler<GetProductInventoryQuery, Result<ProductInventoryDto>> queryHandler, CancellationToken cancellationToken)
+    {
+        var result = await queryHandler.HandleAsync(new GetProductInventoryQuery(productId), cancellationToken);
+        return result.IsSuccess ? Ok(result.Value) : BusinessErrorResponse.From(result.Error);
+    }
 
     [HttpGet("products/{productId:guid}/movements")]
     [Authorize(Policy = Permissions.InventoryRead)]
     [ProducesResponseType(typeof(PagedResult<InventoryMovementDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetMovements(Guid productId, [FromQuery] InventoryMovementHistoryRequest request,
-        [FromServices] IQueryHandler<GetProductInventoryMovementsQuery, PagedResult<InventoryMovementDto>> queryHandler, CancellationToken cancellationToken) =>
-        Ok(await queryHandler.HandleAsync(new GetProductInventoryMovementsQuery(productId, request.ToFilter()), cancellationToken));
+        [FromServices] IQueryHandler<GetProductInventoryMovementsQuery, Result<PagedResult<InventoryMovementDto>>> queryHandler, CancellationToken cancellationToken)
+    {
+        var result = await queryHandler.HandleAsync(request.ToQuery(productId), cancellationToken);
+        return result.IsSuccess ? Ok(result.Value) : BusinessErrorResponse.From(result.Error);
+    }
 }

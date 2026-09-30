@@ -8,6 +8,34 @@ namespace InventoryManagement.Api.Tests;
 public sealed class HttpContractTests
 {
     [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task UnmappedBusinessCodeIsAnInternalError(bool inventoryAction)
+    {
+        await using var factory = new ContractApiFactory();
+        using var client = factory.CreateAuthenticatedClient();
+        factory.Persistence.ProductWriteError = "UNMAPPED_BUSINESS_CODE";
+        factory.Persistence.InventoryError = "UNMAPPED_BUSINESS_CODE";
+        var response = inventoryAction
+            ? await client.PostAsJsonAsync("/api/inventory/movements", new { productId = Guid.NewGuid(), type = "Entry", quantity = 1 })
+            : await client.PostAsJsonAsync("/api/products", ValidProduct());
+        await AssertErrorAsync(response, HttpStatusCode.InternalServerError, "INTERNAL_ERROR");
+        Assert.DoesNotContain("UNMAPPED_BUSINESS_CODE", await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task CreateProductTechnicalFailureRemainsAnInternalError()
+    {
+        await using var factory = new ContractApiFactory();
+        factory.Persistence.ProductTechnicalFailure = new InvalidOperationException("Internal database details.");
+        using var client = factory.CreateAuthenticatedClient();
+        var response = await client.PostAsJsonAsync("/api/products", ValidProduct());
+        await AssertErrorAsync(response, HttpStatusCode.InternalServerError, "INTERNAL_ERROR");
+        Assert.DoesNotContain("Internal database details", await response.Content.ReadAsStringAsync());
+        Assert.Equal(0, factory.Persistence.WriteCount);
+    }
+
+    [Theory]
     [InlineData("Entry", 15)]
     [InlineData("Exit", 5)]
     public async Task MovementAcceptsSpecifiedStringTypes(string type, int expectedStock)

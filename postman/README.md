@@ -27,6 +27,8 @@ Para probar 403, obtén un access token de un usuario sin `products.read` y guá
 
 ## Datos y resultados
 
+Los listados de productos y categorías devuelven `{ items, page, pageSize, totalCount, totalPages }`. La colección verifica este formato y no presupone que el registro recién creado esté en la primera página; lo comprueba mediante la consulta por ID posterior. Para recorrer el catálogo usa `?page=1&pageSize=20` y aumenta page hasta totalPages. El máximo pageSize es 100 y el máximo page es 10000.
+
 - Cada ejecución crea una categoría y un producto con un sufijo único, además de dos movimientos. Las variables de colección `categoryId` y `productId` se capturan automáticamente; no definas variables homónimas en el entorno.
 - Ejecuta el recorrido completo en orden. Las peticiones posteriores necesitan los registros creados al principio. Si falla la creación, corrige el problema y reinicia desde la primera petición.
 - Al finalizar, el producto y la categoría quedan inactivos. Se conserva el stock 7 y los dos movimientos, conforme al borrado lógico de la API. No se eliminan físicamente registros ni se modifica la categoría General o los productos de ejemplo.

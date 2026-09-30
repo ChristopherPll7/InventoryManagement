@@ -3,11 +3,12 @@ using InventoryManagement.Domain.Inventory;
 
 namespace InventoryManagement.Application.Inventory;
 
-public sealed class RegisterInventoryMovementCommandHandler(IInventoryCommandStore store) : ICommandHandler<RegisterInventoryMovementCommand, InventoryMovementResult>
+public sealed class RegisterInventoryMovementCommandHandler(IInventoryCommandStore store) : ICommandHandler<RegisterInventoryMovementCommand, Result<InventoryMovementResult>>
 {
-    public Task<InventoryMovementResult> HandleAsync(RegisterInventoryMovementCommand command, CancellationToken cancellationToken)
-    {
-        var movement = InventoryMovement.Create(command.ProductId, command.Type, command.Quantity, command.Reason);
-        return store.RegisterAsync(movement, cancellationToken);
-    }
+    public Task<Result<InventoryMovementResult>> HandleAsync(RegisterInventoryMovementCommand command, CancellationToken cancellationToken) =>
+        BusinessResult.ExecuteAsync<InventoryMovementResult>(async () =>
+        {
+            var movement = InventoryMovement.Create(command.ProductId, command.Type, command.Quantity, command.Reason);
+            return Result<InventoryMovementResult>.Success(await store.RegisterAsync(movement, cancellationToken));
+        });
 }

@@ -2,4 +2,4 @@ using InventoryManagement.Application.Abstractions;
 
 namespace InventoryManagement.Application.Products;
 
-public sealed record GetProductByIdQuery(Guid Id) : IQuery<ProductDto?>;
+public sealed record GetProductByIdQuery(Guid Id) : IQuery<Result<ProductDto>>;

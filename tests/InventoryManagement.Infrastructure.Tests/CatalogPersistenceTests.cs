@@ -1,3 +1,4 @@
+using InventoryManagement.Application.Abstractions;
 using System.Data;
 using InventoryManagement.Domain.Categories;
 using InventoryManagement.Domain.Common;
@@ -32,7 +33,7 @@ public sealed class CatalogPersistenceTests(SqlServerFixture database)
         await CategoryStore.DeactivateAsync(category.Id, default);
         Assert.Equal(inactive.UpdatedAt, (await queries.GetByIdAsync(category.Id, default))!.UpdatedAt);
         Assert.False(inactive.IsActive);
-        Assert.Contains(await queries.GetAllAsync(default), item => item.Id == category.Id && !item.IsActive);
+        Assert.Contains((await queries.GetAllAsync(new PageRequest(1, 100), default)).Items, item => item.Id == category.Id && !item.IsActive);
         category.Update("Renamed-" + category.Id, null);
         Assert.False((await CategoryStore.UpdateAsync(category, default)).IsActive);
         Assert.Empty(db.ChangeTracker.Entries());
@@ -98,7 +99,7 @@ public sealed class CatalogPersistenceTests(SqlServerFixture database)
         Assert.Equal("CATEGORY_INACTIVE", await CaptureErrorAsync(() => database.CreateProductStore().CreateAsync(candidate, default)));
         var existing = await database.CreateProductAsync();
         existing.Update("Changed", null, existing.Sku, 2, category.Id);
-        Assert.Equal("CATEGORY_INACTIVE", await CaptureErrorAsync(() => database.CreateProductStore().UpdateAsync(existing, default)));
+        Assert.Equal("CATEGORY_INACTIVE", await CaptureErrorAsync(() => database.CreateProductStore().UpdateAsync(existing.Id, new ProductDetails(existing.Name, existing.Description, existing.Sku, existing.Price, existing.CategoryId), default)));
         await using var db = database.CreateReadContext();
         Assert.False(await db.Products.AnyAsync(product => product.Id == candidate.Id));
         var stored = (await new ProductQueries(db).GetByIdAsync(existing.Id, default))!;
@@ -114,7 +115,7 @@ public sealed class CatalogPersistenceTests(SqlServerFixture database)
         var entry = InventoryMovement.Create(product.Id, InventoryMovementType.Entry, 7, null);
         await database.CreateInventoryStore().RegisterAsync(entry, default);
         product.Update(" Updated ", "Description", " new-" + product.Id, 12.50m, category.Id);
-        var result = await database.CreateProductStore().UpdateAsync(product, default);
+        var result = await database.CreateProductStore().UpdateAsync(product.Id, new ProductDetails(product.Name, product.Description, product.Sku, product.Price, product.CategoryId), default);
         Assert.Equal(product.Id, result.Id);
         Assert.Equal("Updated", result.Name);
         Assert.Equal(product.Sku, result.Sku);
@@ -134,7 +135,7 @@ public sealed class CatalogPersistenceTests(SqlServerFixture database)
         await database.CreateProductStore().DeactivateAsync(first.Id, default);
         var originalSku = second.Sku;
         second.Update("Must not persist", null, first.Sku, 99, second.CategoryId);
-        Assert.Equal("DUPLICATE_PRODUCT_SKU", await CaptureErrorAsync(() => database.CreateProductStore().UpdateAsync(second, default)));
+        Assert.Equal("DUPLICATE_PRODUCT_SKU", await CaptureErrorAsync(() => database.CreateProductStore().UpdateAsync(second.Id, new ProductDetails(second.Name, second.Description, second.Sku, second.Price, second.CategoryId), default)));
         await using var db = database.CreateReadContext();
         var stored = (await new ProductQueries(db).GetByIdAsync(second.Id, default))!;
         Assert.Equal(originalSku, stored.Sku);
@@ -153,8 +154,8 @@ public sealed class CatalogPersistenceTests(SqlServerFixture database)
         Assert.Equal(timestamp, await db.Products.Where(item => item.Id == product.Id).Select(item => item.UpdatedAt).SingleAsync());
         Assert.True(product.IsActive);
         product.Update("Changed after deletion", null, product.Sku, 2, product.CategoryId);
-        Assert.False((await database.CreateProductStore().UpdateAsync(product, default)).IsActive);
-        Assert.Contains(await new ProductQueries(db).GetAllAsync(default), item => item.Id == product.Id && !item.IsActive);
+        Assert.False((await database.CreateProductStore().UpdateAsync(product.Id, new ProductDetails(product.Name, product.Description, product.Sku, product.Price, product.CategoryId), default)).IsActive);
+        Assert.Contains((await new ProductQueries(db).GetAllAsync(new PageRequest(1, 100), default)).Items, item => item.Id == product.Id && !item.IsActive);
     }
 
     [SqlServerFact]
@@ -164,7 +165,7 @@ public sealed class CatalogPersistenceTests(SqlServerFixture database)
         var product = Product.Create("Missing", null, "Missing", 1, database.CategoryId);
         Assert.Equal("CATEGORY_NOT_FOUND", await CaptureErrorAsync(() => CategoryStore.UpdateAsync(category, default)));
         Assert.Equal("CATEGORY_NOT_FOUND", await CaptureErrorAsync(() => CategoryStore.DeactivateAsync(category.Id, default)));
-        Assert.Equal("PRODUCT_NOT_FOUND", await CaptureErrorAsync(() => database.CreateProductStore().UpdateAsync(product, default)));
+        Assert.Equal("PRODUCT_NOT_FOUND", await CaptureErrorAsync(() => database.CreateProductStore().UpdateAsync(product.Id, new ProductDetails(product.Name, product.Description, product.Sku, product.Price, product.CategoryId), default)));
         Assert.Equal("PRODUCT_NOT_FOUND", await CaptureErrorAsync(() => database.CreateProductStore().DeactivateAsync(product.Id, default)));
     }
 
@@ -187,7 +188,7 @@ public sealed class CatalogPersistenceTests(SqlServerFixture database)
         product.Update(product.Name, null, product.Sku, product.Price, category.Id);
         var outcomes = await RunCategoryRaceAsync(category.Id,
             () => CategoryStore.DeactivateAsync(category.Id, default),
-            () => database.CreateProductStore().UpdateAsync(product, default));
+            () => database.CreateProductStore().UpdateAsync(product.Id, new ProductDetails(product.Name, product.Description, product.Sku, product.Price, product.CategoryId), default));
         await AssertCategoryAssignmentRaceAsync(category.Id, outcomes);
     }
 

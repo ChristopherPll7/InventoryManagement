@@ -12,8 +12,14 @@ public sealed class CategoryQueries(InventoryReadDbContext dbContext) : ICategor
     public Task<CategoryDto?> GetByIdAsync(Guid id, CancellationToken cancellationToken) =>
         ProjectCategories(dbContext.Categories.Where(category => category.Id == id)).SingleOrDefaultAsync(cancellationToken);
 
-    public async Task<IReadOnlyCollection<CategoryDto>> GetAllAsync(CancellationToken cancellationToken) =>
-        await ProjectCategories(dbContext.Categories.OrderBy(category => category.Name).ThenBy(category => category.Id)).ToListAsync(cancellationToken);
+    public async Task<PagedResult<CategoryDto>> GetAllAsync(PageRequest pagination, CancellationToken cancellationToken)
+    {
+        var categories = dbContext.Categories.AsNoTracking();
+        var totalCount = await categories.LongCountAsync(cancellationToken);
+        var items = await ProjectCategories(categories.OrderBy(category => category.Name).ThenBy(category => category.Id)
+            .Skip(pagination.Offset).Take(pagination.PageSize)).ToListAsync(cancellationToken);
+        return new PagedResult<CategoryDto>(items, pagination.Page, pagination.PageSize, totalCount);
+    }
 
     public Task<bool> NameExistsAsync(string name, CancellationToken cancellationToken, Guid? excludingCategoryId = null) =>
         dbContext.Categories.AsNoTracking().AnyAsync(category => category.Name == name && category.Id != excludingCategoryId, cancellationToken);

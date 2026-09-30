@@ -1,28 +1,28 @@
 using InventoryManagement.Domain.Common;
+using InventoryManagement.Application.Abstractions;
 using InventoryManagement.Domain.Inventory;
 
 namespace InventoryManagement.Application.Inventory;
 
 public sealed class InventoryMovementFilter
 {
-    public const int DefaultPageSize = 20;
-    public const int MaximumPageSize = 100;
-    public const int MaximumPage = 10000;
+    public const int DefaultPageSize = PageRequest.DefaultPageSize;
+    public const int MaximumPageSize = PageRequest.MaximumPageSize;
+    public const int MaximumPage = PageRequest.MaximumPage;
 
     public InventoryMovementFilter(InventoryMovementType? type = null, DateTimeOffset? startDate = null,
         DateTimeOffset? endDate = null, int page = 1, int pageSize = DefaultPageSize)
     {
         if (type.HasValue && !Enum.IsDefined(type.Value))
-            throw new DomainException("INVALID_INVENTORY_TYPE", "Movement type must be Entry or Exit.");
+            throw new DomainException(ErrorCodes.InvalidInventoryType, "Movement type must be Entry or Exit.");
         if (startDate.HasValue && endDate.HasValue && startDate > endDate)
-            throw new DomainException("INVALID_DATE_RANGE", "Start date cannot be later than end date.");
-        if (page < 1 || page > MaximumPage || pageSize < 1 || pageSize > MaximumPageSize)
-            throw new DomainException("INVALID_PAGINATION", $"Page must be between 1 and {MaximumPage}, and page size between 1 and {MaximumPageSize}.");
+            throw new DomainException(ErrorCodes.InvalidDateRange, "Start date cannot be later than end date.");
+        var pagination = new PageRequest(page, pageSize);
         Type = type;
         StartDate = startDate;
         EndDate = endDate;
-        Page = page;
-        PageSize = pageSize;
+        Page = pagination.Page;
+        PageSize = pagination.PageSize;
     }
 
     public InventoryMovementType? Type { get; }

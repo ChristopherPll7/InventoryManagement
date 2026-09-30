@@ -2,4 +2,4 @@ using InventoryManagement.Application.Abstractions;
 
 namespace InventoryManagement.Application.Products;
 
-public sealed record UpdateProductCommand(Guid Id, string Name, string? Description, string Sku, decimal Price, Guid CategoryId) : ICommand<ProductDto>;
+public sealed record UpdateProductCommand(Guid Id, string Name, string? Description, string Sku, decimal Price, Guid CategoryId) : ICommand<Result<ProductDto>>;

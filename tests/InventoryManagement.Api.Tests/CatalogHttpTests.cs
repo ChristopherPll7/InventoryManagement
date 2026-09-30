@@ -25,7 +25,7 @@ public sealed class CatalogHttpTests
         Assert.Equal(HttpStatusCode.NoContent, (await client.DeleteAsync($"/api/categories/{id}")).StatusCode);
         Assert.Equal(HttpStatusCode.NoContent, (await client.DeleteAsync($"/api/categories/{id}")).StatusCode);
         Assert.False((await client.GetFromJsonAsync<CategoryDto>($"/api/categories/{id}"))!.IsActive);
-        Assert.Contains((await client.GetFromJsonAsync<CategoryDto[]>("/api/categories"))!, item => item.Id == id && !item.IsActive);
+        Assert.Contains((await client.GetFromJsonAsync<PagedResult<CategoryDto>>("/api/categories"))!.Items, item => item.Id == id && !item.IsActive);
     }
 
     [Fact]
